@@ -7,12 +7,13 @@ import {
   RecaptchaVerifier,
   User,
   createUserWithEmailAndPassword,
+  getRedirectResult,
   getMultiFactorResolver,
   multiFactor,
   onAuthStateChanged,
   sendEmailVerification,
   signInWithEmailAndPassword,
-  signInWithPopup,
+  signInWithRedirect,
   signOut,
   updateProfile,
 } from 'firebase/auth';
@@ -55,6 +56,8 @@ const readableError = (error: unknown) => {
     'auth/too-many-requests': 'Too many attempts. Please wait and try again.',
     'auth/quota-exceeded': 'SMS quota reached for this account. Please try again later.',
     'auth/operation-not-allowed': 'This sign-in method is not enabled yet.',
+    'auth/unauthorized-domain': 'This website domain is not authorized for sign-in yet.',
+    'auth/popup-blocked': 'The sign-in window was blocked. Please allow redirects for this site and try again.',
   };
   return (code && messages[code]) || (error as { message?: string })?.message || 'Authentication failed.';
 };
@@ -94,6 +97,42 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
     setSuccess('You are signed in securely.');
     setTimeout(onClose, 700);
   };
+
+  const handleGoogleMfaRequired = async (authError: unknown) => {
+    const nextResolver = getMultiFactorResolver(auth, authError as Parameters<typeof getMultiFactorResolver>[1]);
+    const phoneHint = nextResolver.hints.find(
+      (hint) => hint.factorId === PhoneMultiFactorGenerator.FACTOR_ID
+    );
+    if (!phoneHint) throw new Error('No phone verification method is enrolled for this account.');
+    const id = await new PhoneAuthProvider(auth).verifyPhoneNumber(
+      { multiFactorHint: phoneHint, session: nextResolver.session },
+      getRecaptcha()
+    );
+    setResolver(nextResolver);
+    setVerificationId(id);
+    setMode('sms-check');
+    setSuccess('A verification code was sent to your enrolled phone.');
+  };
+
+  const handleGoogleResult = (user: User) => {
+    if (multiFactor(user).enrolledFactors.length) finish(user);
+    else { setPendingUser(user); setMode('enroll-phone'); setSuccess('Add your phone number to enable SMS verification.'); }
+  };
+
+  useEffect(() => {
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result) handleGoogleResult(result.user);
+      })
+      .catch(async (authError: unknown) => {
+        if ((authError as { code?: string })?.code === 'auth/multi-factor-auth-required') {
+          try { await handleGoogleMfaRequired(authError); }
+          catch (mfaError: unknown) { setError(readableError(mfaError)); }
+        } else if ((authError as { code?: string })?.code !== 'auth/no-auth-event') {
+          setError(readableError(authError));
+        }
+      });
+  }, []);
 
   const signIn = async (event: React.FormEvent) => {
     event.preventDefault(); setLoading(true); setError(null);
@@ -168,29 +207,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
   const googleSignIn = async () => {
     setLoading(true); setError(null);
     try {
-      const result = await signInWithPopup(auth, new GoogleAuthProvider());
-      if (multiFactor(result.user).enrolledFactors.length) finish(result.user);
-      else { setPendingUser(result.user); setMode('enroll-phone'); }
+      await signInWithRedirect(auth, new GoogleAuthProvider());
     } catch (authError: unknown) {
-      if ((authError as { code?: string })?.code === 'auth/multi-factor-auth-required') {
-        const nextResolver = getMultiFactorResolver(auth, authError as Parameters<typeof getMultiFactorResolver>[1]);
-        const phoneHint = nextResolver.hints.find(
-          (hint) => hint.factorId === PhoneMultiFactorGenerator.FACTOR_ID
-        );
-        if (!phoneHint) throw new Error('No phone verification method is enrolled for this account.');
-        const id = await new PhoneAuthProvider(auth).verifyPhoneNumber(
-          { multiFactorHint: phoneHint, session: nextResolver.session },
-          getRecaptcha()
-        );
-        setResolver(nextResolver);
-        setVerificationId(id);
-        setMode('sms-check');
-        setSuccess('A verification code was sent to your enrolled phone.');
-      } else {
-        setError(readableError(authError));
-      }
+      setError(readableError(authError));
+      setLoading(false);
     }
-    finally { setLoading(false); }
   };
   const logout = async () => { await signOut(auth); onUserChange(null); onClose(); };
 
