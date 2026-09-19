@@ -104,7 +104,13 @@ export default function App() {
     quantity = 1, 
     selectedColor = 'Florid Slate', 
     selectedSize = 'Standard'
-  ) => {
+  ): boolean => {
+    if (!currentUser) {
+      setAuthInitialMode('signin');
+      setIsAuthOpen(true);
+      return false;
+    }
+
     setCart((prev) => {
       const existingIndex = prev.findIndex(
         (item) => item.product.id === product.id && item.selectedColor === selectedColor
@@ -125,6 +131,7 @@ export default function App() {
         },
       ];
     });
+    return true;
   };
 
   const handleUpdateCartQuantity = (cartItemId: string, newQuantity: number) => {

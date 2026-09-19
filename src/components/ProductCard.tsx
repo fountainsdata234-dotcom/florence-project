@@ -5,7 +5,7 @@ import { Star, ShoppingBag, Zap, Heart, Eye, Check, ShieldCheck } from 'lucide-r
 
 interface ProductCardProps {
   product: Product;
-  onAddToCart: (product: Product) => void;
+  onAddToCart: (product: Product) => boolean;
   onQuickView: (product: Product) => void;
   onToggleWishlist?: (productId: string) => void;
   isWishlisted?: boolean;
@@ -25,9 +25,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
   const handleAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onAddToCart(product);
-    setAddedEffect(true);
-    setTimeout(() => setAddedEffect(false), 1200);
+    if (onAddToCart(product)) {
+      setAddedEffect(true);
+      setTimeout(() => setAddedEffect(false), 1200);
+    }
   };
 
   return (

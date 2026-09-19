@@ -17,7 +17,7 @@ import {
 interface QuickViewModalProps {
   product: Product | null;
   onClose: () => void;
-  onAddToCart: (product: Product, quantity: number, color?: string, size?: string) => void;
+  onAddToCart: (product: Product, quantity: number, color?: string, size?: string) => boolean;
   onToggleWishlist?: (productId: string) => void;
   isWishlisted?: boolean;
 }
@@ -42,12 +42,13 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
   const sizes = ['Standard', 'Compact', 'Pro Plus'];
 
   const handleAddToCart = () => {
-    onAddToCart(product, quantity, selectedColor, selectedSize);
-    setAdded(true);
-    setTimeout(() => {
-      setAdded(false);
-      onClose();
-    }, 900);
+    if (onAddToCart(product, quantity, selectedColor, selectedSize)) {
+      setAdded(true);
+      setTimeout(() => {
+        setAdded(false);
+        onClose();
+      }, 900);
+    }
   };
 
   return (

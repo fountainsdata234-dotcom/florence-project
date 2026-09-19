@@ -8,7 +8,7 @@ interface ProductCarouselProps {
   subtitle?: string;
   badge?: string;
   products: Product[];
-  onAddToCart: (product: Product) => void;
+  onAddToCart: (product: Product) => boolean;
   onQuickView: (product: Product) => void;
   onToggleWishlist?: (productId: string) => void;
   wishlistIds?: string[];
