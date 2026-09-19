@@ -171,7 +171,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
       const result = await signInWithPopup(auth, new GoogleAuthProvider());
       if (multiFactor(result.user).enrolledFactors.length) finish(result.user);
       else { setPendingUser(result.user); setMode('enroll-phone'); }
-    } catch (authError: unknown) { setError(readableError(authError)); }
+    } catch (authError: unknown) {
+      if ((authError as { code?: string })?.code === 'auth/multi-factor-auth-required') {
+        const nextResolver = getMultiFactorResolver(auth, authError as Parameters<typeof getMultiFactorResolver>[1]);
+        const phoneHint = nextResolver.hints.find(
+          (hint) => hint.factorId === PhoneMultiFactorGenerator.FACTOR_ID
+        );
+        if (!phoneHint) throw new Error('No phone verification method is enrolled for this account.');
+        const id = await new PhoneAuthProvider(auth).verifyPhoneNumber(
+          { multiFactorHint: phoneHint, session: nextResolver.session },
+          getRecaptcha()
+        );
+        setResolver(nextResolver);
+        setVerificationId(id);
+        setMode('sms-check');
+        setSuccess('A verification code was sent to your enrolled phone.');
+      } else {
+        setError(readableError(authError));
+      }
+    }
     finally { setLoading(false); }
   };
   const logout = async () => { await signOut(auth); onUserChange(null); onClose(); };
