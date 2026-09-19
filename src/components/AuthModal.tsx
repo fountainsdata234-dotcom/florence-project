@@ -83,7 +83,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
     if (isOpen) {
       setError(null);
       setSuccess(null);
-      setMode(currentUser ? 'profile' : initialMode);
+      const googleAuthPending = sessionStorage.getItem('florid_google_auth_pending') === 'true';
+      setMode(googleAuthPending ? 'enroll-phone' : currentUser ? 'profile' : initialMode);
     }
   }, [isOpen, currentUser, initialMode]);
   useEffect(() => () => recaptcha.current?.clear(), []);
@@ -93,6 +94,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
     return recaptcha.current;
   };
   const finish = (user: User) => {
+    sessionStorage.removeItem('florid_google_auth_pending');
     onUserChange(toProfile(user));
     setSuccess('You are signed in securely.');
     setTimeout(onClose, 700);
@@ -115,6 +117,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
   };
 
   const handleGoogleResult = (user: User) => {
+    sessionStorage.setItem('florid_google_auth_pending', 'true');
     if (multiFactor(user).enrolledFactors.length) finish(user);
     else { setPendingUser(user); setMode('enroll-phone'); setSuccess('Add your phone number to enable SMS verification.'); }
   };
@@ -207,8 +210,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
   const googleSignIn = async () => {
     setLoading(true); setError(null);
     try {
+      sessionStorage.setItem('florid_google_auth_pending', 'true');
       await signInWithRedirect(auth, new GoogleAuthProvider());
     } catch (authError: unknown) {
+      sessionStorage.removeItem('florid_google_auth_pending');
       setError(readableError(authError));
       setLoading(false);
     }
