@@ -81,7 +81,16 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
           className="w-screen max-w-md bg-white shadow-2xl border-l border-slate-200 flex flex-col"
         >
           {/* Header */}
-          <div className="p-4 sm:p-6 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+          <div className="cart-header-light relative overflow-hidden p-4 sm:p-6 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+            <div aria-hidden="true" className="cart-ray-field">
+              <span className="cart-ray cart-ray-one" />
+              <span className="cart-ray cart-ray-two" />
+              <span className="cart-ray cart-ray-three" />
+              <span className="cart-light-particle cart-light-particle-one" />
+              <span className="cart-light-particle cart-light-particle-two" />
+              <span className="cart-light-particle cart-light-particle-three" />
+              <span className="cart-light-particle cart-light-particle-four" />
+            </div>
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center">
                 <ShoppingBag className="w-4 h-4" />

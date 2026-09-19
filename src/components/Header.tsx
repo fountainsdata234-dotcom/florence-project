@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { UserProfile, NotificationItem } from '../types';
 import { 
   Search, 
@@ -48,6 +48,12 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [currentTime, setCurrentTime] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const categories = [
     { id: 'all', label: 'All Deals', icon: Sparkles },
@@ -59,6 +65,16 @@ export const Header: React.FC<HeaderProps> = ({
   ];
 
   const unreadCount = notifications.filter((n) => !n.read).length;
+  const hour = currentTime.getHours();
+  const greeting = hour >= 5 && hour < 12
+    ? 'Good morning'
+    : hour >= 12 && hour < 17
+      ? 'Good afternoon'
+      : hour >= 17 && hour < 21
+        ? 'Good evening'
+        : 'Good night';
+  const firstName = currentUser?.displayName?.trim().split(/\s+/)[0];
+  const greetingName = firstName || 'Florid shopper';
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 transition-colors">
@@ -66,10 +82,11 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="bg-slate-900 text-white text-[10px] sm:text-[11px] py-1.5 px-3 sm:px-4">
         <div className="max-w-7xl mx-auto flex items-center justify-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap">
-            <span className="bg-red-600 text-white font-extrabold px-1.5 py-0.2 rounded text-[10px] tracking-wide uppercase">
-              Florid Flash
+            <span className="shrink-0 font-bold text-amber-300">
+              {greeting}, {greetingName}
             </span>
-            <span className="min-w-0 font-medium text-slate-200 truncate">
+            <span className="hidden min-w-0 font-medium text-slate-200 truncate md:inline">
+              <span className="mx-1 text-slate-500">|</span>
               ⚡ Up to 75% OFF + Free Shipping on all orders over $25 | Secure Checkout
             </span>
           </div>
