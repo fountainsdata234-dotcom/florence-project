@@ -48,6 +48,9 @@ const toProfile = (user: User): UserProfile => ({
 
 const readableError = (error: unknown) => {
   const code = (error as { code?: string })?.code;
+  if (!navigator.onLine || code === 'auth/network-request-failed') {
+    return 'You appear to be offline. Reconnect to the internet and try again.';
+  }
   const messages: Record<string, string> = {
     'auth/invalid-credential': 'The email or password is incorrect.',
     'auth/email-already-in-use': 'An account already exists for this email.',
@@ -55,7 +58,7 @@ const readableError = (error: unknown) => {
     'auth/invalid-phone-number': 'Enter a valid phone number with country code.',
     'auth/too-many-requests': 'Too many attempts. Please wait and try again.',
     'auth/quota-exceeded': 'SMS quota reached for this account. Please try again later.',
-    'auth/operation-not-allowed': 'This sign-in method is not enabled yet.',
+    'auth/operation-not-allowed': 'This sign-in method is not enabled in the active Firebase project. Check Email/Password, Google, Phone, and SMS MFA settings.',
     'auth/unauthorized-domain': 'This website domain is not authorized for sign-in yet.',
     'auth/popup-blocked': 'The sign-in window was blocked. Please allow redirects for this site and try again.',
   };
