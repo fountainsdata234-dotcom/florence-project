@@ -106,6 +106,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
     if (!recaptcha.current) recaptcha.current = new RecaptchaVerifier(auth, 'phone-recaptcha', { size: 'invisible' });
     return recaptcha.current;
   };
+
+  const waitForGoogleUser = async () => {
+    await auth.authStateReady();
+    if (pendingUser || redirectUser.current || auth.currentUser) {
+      return pendingUser || redirectUser.current || auth.currentUser;
+    }
+
+    return new Promise<User | null>((resolve) => {
+      let settled = false;
+      let unsubscribe = () => {};
+      const finishWait = (user: User | null) => {
+        if (settled) return;
+        settled = true;
+        unsubscribe();
+        window.clearTimeout(timeout);
+        resolve(user);
+      };
+      const timeout = window.setTimeout(() => finishWait(auth.currentUser), 15_000);
+      unsubscribe = onAuthStateChanged(auth, (user: User | null) => {
+        if (user) finishWait(user);
+      });
+    });
+  };
   const finish = (user: User) => {
     sessionStorage.removeItem('florid_google_auth_pending');
     onUserChange(toProfile(user));
@@ -184,9 +207,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
     event.preventDefault();
     setLoading(true); setError(null);
     await auth.authStateReady();
-    const user = pendingUser || redirectUser.current || auth.currentUser;
+    const user = await waitForGoogleUser();
     if (!user) {
-      setError('Your Google account is still restoring. Wait a moment, then try sending the SMS again.');
+      setError('Google sign-in did not finish. Please return to sign in and start Google again.');
       setLoading(false);
       return;
     }
