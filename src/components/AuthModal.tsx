@@ -207,9 +207,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
     event.preventDefault();
     setLoading(true); setError(null);
     await auth.authStateReady();
-    const user = await waitForGoogleUser();
+    let user = await waitForGoogleUser();
     if (!user) {
-      setError('Google sign-in did not finish. Please return to sign in and start Google again.');
+      const redirectResult = await getRedirectResult(auth);
+      if (redirectResult?.user) {
+        redirectUser.current = redirectResult.user;
+        setPendingUser(redirectResult.user);
+        user = redirectResult.user;
+      }
+    }
+    if (!user) {
+      setError('We could not restore the Google account on this browser. Please use the retry button below.');
       setLoading(false);
       return;
     }
