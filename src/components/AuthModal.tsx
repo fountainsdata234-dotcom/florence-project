@@ -81,11 +81,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
   const [success, setSuccess] = useState<string | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const recaptcha = useRef<RecaptchaVerifier | null>(null);
+  const redirectUser = useRef<User | null>(null);
 
   useEffect(() => onAuthStateChanged(auth, (user: User | null) => {
     setAuthReady(true);
     onUserChange(user ? toProfile(user) : null);
     if (user && sessionStorage.getItem('florid_google_auth_pending') === 'true') {
+      redirectUser.current = user;
       setPendingUser(user);
       setMode('enroll-phone');
     }
@@ -136,7 +138,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
   useEffect(() => {
     getRedirectResult(auth)
       .then((result) => {
-        if (result) handleGoogleResult(result.user);
+        if (result) {
+          redirectUser.current = result.user;
+          handleGoogleResult(result.user);
+        }
       })
       .catch(async (authError: unknown) => {
         if ((authError as { code?: string })?.code === 'auth/multi-factor-auth-required') {
@@ -179,9 +184,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
     event.preventDefault();
     setLoading(true); setError(null);
     await auth.authStateReady();
-    const user = pendingUser || auth.currentUser;
+    const user = pendingUser || redirectUser.current || auth.currentUser;
     if (!user) {
-      setError('Your Google sign-in session was not found. Please start Google sign-in again.');
+      setError('Your Google account is still restoring. Wait a moment, then try sending the SMS again.');
       setLoading(false);
       return;
     }
