@@ -1,19 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  GoogleAuthProvider,
   MultiFactorResolver,
   PhoneAuthProvider,
   PhoneMultiFactorGenerator,
   RecaptchaVerifier,
   User,
   createUserWithEmailAndPassword,
-  getRedirectResult,
   getMultiFactorResolver,
   multiFactor,
   onAuthStateChanged,
   sendEmailVerification,
   signInWithEmailAndPassword,
-  signInWithRedirect,
   signOut,
   updateProfile,
 } from 'firebase/auth';
@@ -58,9 +55,8 @@ const readableError = (error: unknown) => {
     'auth/invalid-phone-number': 'Enter a valid phone number with country code.',
     'auth/too-many-requests': 'Too many attempts. Please wait and try again.',
     'auth/quota-exceeded': 'SMS quota reached for this account. Please try again later.',
-    'auth/operation-not-allowed': 'This sign-in method is not enabled in the active Firebase project. Check Email/Password, Google, Phone, and SMS MFA settings.',
+    'auth/operation-not-allowed': 'This sign-in method is not enabled in the active account project. Check Email/Password, Phone, and SMS MFA settings.',
     'auth/unauthorized-domain': 'This website domain is not authorized for sign-in yet.',
-    'auth/popup-blocked': 'The sign-in window was blocked. Please allow redirects for this site and try again.',
   };
   return (code && messages[code]) || (error as { message?: string })?.message || 'Authentication failed.';
 };
@@ -81,13 +77,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
   const [success, setSuccess] = useState<string | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const recaptcha = useRef<RecaptchaVerifier | null>(null);
-  const redirectUser = useRef<User | null>(null);
 
   useEffect(() => onAuthStateChanged(auth, (user: User | null) => {
     setAuthReady(true);
     onUserChange(user ? toProfile(user) : null);
-    if (user && sessionStorage.getItem('florid_google_auth_pending') === 'true') {
-      redirectUser.current = user;
+    if (user && multiFactor(user).enrolledFactors.length === 0) {
       setPendingUser(user);
       setMode('enroll-phone');
     }
@@ -96,85 +90,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
     if (isOpen) {
       setError(null);
       setSuccess(null);
-      const googleAuthPending = sessionStorage.getItem('florid_google_auth_pending') === 'true';
-      setMode(googleAuthPending ? 'enroll-phone' : currentUser ? initialMode === 'phone' ? 'enroll-phone' : 'profile' : initialMode === 'phone' ? 'enroll-phone' : initialMode);
+      setMode(currentUser ? initialMode === 'phone' ? 'enroll-phone' : 'profile' : initialMode === 'phone' ? 'enroll-phone' : initialMode);
     }
   }, [isOpen, currentUser, initialMode]);
   useEffect(() => () => recaptcha.current?.clear(), []);
 
   const getRecaptcha = () => {
-    if (!recaptcha.current) recaptcha.current = new RecaptchaVerifier(auth, 'phone-recaptcha', { size: 'invisible' });
+    if (!recaptcha.current) {
+      const container = document.getElementById('phone-recaptcha');
+      if (container) container.replaceChildren();
+      recaptcha.current = new RecaptchaVerifier(auth, 'phone-recaptcha', {
+        size: 'invisible',
+        'expired-callback': () => {
+          recaptcha.current?.clear();
+          recaptcha.current = null;
+        },
+      });
+    }
     return recaptcha.current;
   };
-
-  const waitForGoogleUser = async () => {
-    await auth.authStateReady();
-    if (pendingUser || redirectUser.current || auth.currentUser) {
-      return pendingUser || redirectUser.current || auth.currentUser;
-    }
-
-    return new Promise<User | null>((resolve) => {
-      let settled = false;
-      let unsubscribe = () => {};
-      const finishWait = (user: User | null) => {
-        if (settled) return;
-        settled = true;
-        unsubscribe();
-        window.clearTimeout(timeout);
-        resolve(user);
-      };
-      const timeout = window.setTimeout(() => finishWait(auth.currentUser), 15_000);
-      unsubscribe = onAuthStateChanged(auth, (user: User | null) => {
-        if (user) finishWait(user);
-      });
-    });
-  };
   const finish = (user: User) => {
-    sessionStorage.removeItem('florid_google_auth_pending');
     onUserChange(toProfile(user));
     setSuccess('You are signed in securely.');
     setTimeout(onClose, 700);
   };
 
-  const handleGoogleMfaRequired = async (authError: unknown) => {
-    const nextResolver = getMultiFactorResolver(auth, authError as Parameters<typeof getMultiFactorResolver>[1]);
-    const phoneHint = nextResolver.hints.find(
-      (hint) => hint.factorId === PhoneMultiFactorGenerator.FACTOR_ID
-    );
-    if (!phoneHint) throw new Error('No phone verification method is enrolled for this account.');
-    const id = await new PhoneAuthProvider(auth).verifyPhoneNumber(
-      { multiFactorHint: phoneHint, session: nextResolver.session },
-      getRecaptcha()
-    );
-    setResolver(nextResolver);
-    setVerificationId(id);
-    setMode('sms-check');
-    setSuccess('A verification code was sent to your enrolled phone.');
-  };
-
-  const handleGoogleResult = (user: User) => {
-    sessionStorage.setItem('florid_google_auth_pending', 'true');
-    if (multiFactor(user).enrolledFactors.length) finish(user);
-    else { setPendingUser(user); setMode('enroll-phone'); setSuccess('Add your phone number to enable SMS verification.'); }
-  };
-
-  useEffect(() => {
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result) {
-          redirectUser.current = result.user;
-          handleGoogleResult(result.user);
-        }
-      })
-      .catch(async (authError: unknown) => {
-        if ((authError as { code?: string })?.code === 'auth/multi-factor-auth-required') {
-          try { await handleGoogleMfaRequired(authError); }
-          catch (mfaError: unknown) { setError(readableError(mfaError)); }
-        } else if ((authError as { code?: string })?.code !== 'auth/no-auth-event') {
-          setError(readableError(authError));
-        }
-      });
-  }, []);
 
   const signIn = async (event: React.FormEvent) => {
     event.preventDefault(); setLoading(true); setError(null);
@@ -207,17 +147,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
     event.preventDefault();
     setLoading(true); setError(null);
     await auth.authStateReady();
-    let user = await waitForGoogleUser();
+    const user = pendingUser || auth.currentUser;
     if (!user) {
-      const redirectResult = await getRedirectResult(auth);
-      if (redirectResult?.user) {
-        redirectUser.current = redirectResult.user;
-        setPendingUser(redirectResult.user);
-        user = redirectResult.user;
-      }
-    }
-    if (!user) {
-      setError('We could not restore the Google account on this browser. Please use the retry button below.');
+      setError('Your account session is not ready. Please sign in again and retry.');
       setLoading(false);
       return;
     }
@@ -232,6 +164,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
     } catch (authError: unknown) {
       recaptcha.current?.clear();
       recaptcha.current = null;
+      document.getElementById('phone-recaptcha')?.replaceChildren();
       setError(readableError(authError));
     }
     finally { setLoading(false); }
@@ -266,20 +199,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
     finally { setLoading(false); }
   };
 
-  const googleSignIn = async () => {
-    setLoading(true); setError(null);
-    try {
-      sessionStorage.setItem('florid_google_auth_pending', 'true');
-      await signInWithRedirect(auth, new GoogleAuthProvider());
-    } catch (authError: unknown) {
-      sessionStorage.removeItem('florid_google_auth_pending');
-      setError(readableError(authError));
-      setLoading(false);
-    }
-  };
-
   const restartAuthentication = () => {
-    sessionStorage.removeItem('florid_google_auth_pending');
     setPendingUser(null);
     setResolver(null);
     setVerificationId(null);
@@ -304,7 +224,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
         {mode === 'email-check' && <div className="space-y-4 text-center"><Mail className="w-10 h-10 text-slate-700 mx-auto" /><p className="text-sm text-slate-600">A verification link was sent to <strong>{pendingUser?.email}</strong>. Verify your email before adding phone security.</p><button onClick={continueAfterEmailVerification} disabled={loading} className="w-full py-2.5 rounded-xl bg-slate-900 text-white">{loading ? 'Checking...' : 'I verified my email'}</button></div>}
         {mode === 'enroll-phone' && <form onSubmit={sendSms} className="space-y-4"><p className="text-xs text-slate-600">Choose your country, enter your local number, and we will send a 6-digit SMS code.</p><div className="flex gap-2"><select aria-label="Country calling code" value={country} onChange={(event) => setCountry(event.target.value as CountryCode)} className="w-[42%] min-w-0 rounded-xl border border-slate-300 bg-white px-2 py-2.5 text-sm"><option value="US">🇺🇸 United States (+1)</option>{countryCodes.filter((item) => item !== 'US').map((item) => <option key={item} value={item}>{countryFlag(item)} {countryNames.of(item) || item} (+{getCountryCallingCode(item)})</option>)}</select><Field icon={<Phone />} type="tel" value={phoneNumber} onChange={setPhoneNumber} placeholder="Phone number" /></div><button type="submit" disabled={loading || !authReady} className="w-full py-2.5 rounded-xl bg-slate-900 text-white">{loading ? 'Sending SMS...' : !authReady ? 'Restoring account...' : 'Send SMS Code'} <ArrowRight className="inline w-4 h-4" /></button><button type="button" onClick={restartAuthentication} className="w-full text-xs font-medium text-slate-500 hover:text-slate-900">Back to sign in and try again</button></form>}
         {mode === 'sms-check' && <form onSubmit={verifySms} className="space-y-4"><p className="text-xs text-slate-600">Enter the 6-digit code sent to your phone. The code is never displayed here.</p><Field type="text" value={smsCode} onChange={(value) => setSmsCode(value.replace(/\D/g, ''))} placeholder="6-digit code" /><button disabled={loading} className="w-full py-2.5 rounded-xl bg-slate-900 text-white">{loading ? 'Verifying...' : 'Verify SMS Code'} <ArrowRight className="inline w-4 h-4" /></button></form>}
-        {mode === 'signin' && <form onSubmit={signIn} className="space-y-4"><Field icon={<Mail />} type="email" value={email} onChange={setEmail} placeholder="you@example.com" /><Field icon={<Lock />} type="password" value={password} onChange={setPassword} placeholder="Password" /><button disabled={loading} className="w-full py-2.5 rounded-xl bg-slate-900 text-white">{loading ? 'Signing in...' : 'Sign In'} <ArrowRight className="inline w-4 h-4" /></button><button type="button" onClick={googleSignIn} className="w-full py-2.5 rounded-xl border border-slate-300 text-slate-700">Continue with Google</button><button type="button" onClick={() => setMode('signup')} className="w-full text-xs text-slate-500">Create a new account</button></form>}
+        {mode === 'signin' && <form onSubmit={signIn} className="space-y-4"><Field icon={<Mail />} type="email" value={email} onChange={setEmail} placeholder="you@example.com" /><Field icon={<Lock />} type="password" value={password} onChange={setPassword} placeholder="Password" /><button disabled={loading} className="w-full py-2.5 rounded-xl bg-slate-900 text-white">{loading ? 'Signing in...' : 'Sign In'} <ArrowRight className="inline w-4 h-4" /></button><button type="button" onClick={() => setMode('signup')} className="w-full text-xs text-slate-500">Create a new account</button></form>}
         {mode === 'signup' && <form onSubmit={signUp} className="space-y-4"><Field icon={<UserIcon />} type="text" value={name} onChange={setName} placeholder="Full name" /><Field icon={<Mail />} type="email" value={email} onChange={setEmail} placeholder="you@example.com" /><Field icon={<Lock />} type="password" value={password} onChange={setPassword} placeholder="At least 6 characters" /><button disabled={loading} className="w-full py-2.5 rounded-xl bg-slate-900 text-white">{loading ? 'Creating account...' : 'Create Account'} <ArrowRight className="inline w-4 h-4" /></button><button type="button" onClick={() => setMode('signin')} className="w-full text-xs text-slate-500">Already have an account? Sign in</button></form>}
       </div><div id="phone-recaptcha" />
     </div>

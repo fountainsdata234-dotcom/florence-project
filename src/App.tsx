@@ -60,13 +60,6 @@ export default function App() {
   // Back to Top button visibility
   const [showBackToTop, setShowBackToTop] = useState(false);
 
-  useEffect(() => {
-    if (sessionStorage.getItem('florid_google_auth_pending') === 'true') {
-      setAuthInitialMode('signin');
-      setIsAuthOpen(true);
-    }
-  }, []);
-
   // Persist cart
   useEffect(() => {
     try {
