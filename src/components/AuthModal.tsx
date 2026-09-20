@@ -93,17 +93,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
       setMode(currentUser ? initialMode === 'phone' ? 'enroll-phone' : 'profile' : initialMode === 'phone' ? 'enroll-phone' : initialMode);
     }
   }, [isOpen, currentUser, initialMode]);
-  useEffect(() => () => recaptcha.current?.clear(), []);
+  const resetRecaptcha = () => {
+    try {
+      recaptcha.current?.clear();
+    } catch {
+      // The verifier may already be cleared after an expired challenge.
+    }
+    recaptcha.current = null;
+    document.getElementById('phone-recaptcha')?.replaceChildren();
+  };
+
+  useEffect(() => () => resetRecaptcha(), []);
 
   const getRecaptcha = () => {
     if (!recaptcha.current) {
-      const container = document.getElementById('phone-recaptcha');
-      if (container) container.replaceChildren();
       recaptcha.current = new RecaptchaVerifier(auth, 'phone-recaptcha', {
         size: 'invisible',
         'expired-callback': () => {
-          recaptcha.current?.clear();
-          recaptcha.current = null;
+          resetRecaptcha();
         },
       });
     }
@@ -146,6 +153,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
   const sendSms = async (event: React.FormEvent) => {
     event.preventDefault();
     setLoading(true); setError(null);
+    resetRecaptcha();
     await auth.authStateReady();
     const user = pendingUser || auth.currentUser;
     if (!user) {
@@ -160,11 +168,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
       const fullPhoneNumber = `+${getCountryCallingCode(country)}${localDigits}`;
       const session = await multiFactor(user).getSession();
       const id = await new PhoneAuthProvider(auth).verifyPhoneNumber({ phoneNumber: fullPhoneNumber, session }, getRecaptcha());
+      resetRecaptcha();
       setVerificationId(id); setMode('sms-check'); setSuccess('A verification code was sent by SMS.');
     } catch (authError: unknown) {
-      recaptcha.current?.clear();
-      recaptcha.current = null;
-      document.getElementById('phone-recaptcha')?.replaceChildren();
+      resetRecaptcha();
       setError(readableError(authError));
     }
     finally { setLoading(false); }
