@@ -50,7 +50,7 @@ export default function App() {
   // Modals & Panels
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [authInitialMode, setAuthInitialMode] = useState<'signin' | 'signup'>('signin');
+  const [authInitialMode, setAuthInitialMode] = useState<'signin' | 'signup' | 'phone'>('signin');
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
   
   // User Authentication

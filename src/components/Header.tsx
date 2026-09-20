@@ -20,7 +20,7 @@ import {
 interface HeaderProps {
   cartCount: number;
   onOpenCart: () => void;
-  onOpenAuth: (mode?: 'signin' | 'signup') => void;
+  onOpenAuth: (mode?: 'signin' | 'signup' | 'phone') => void;
   currentUser: UserProfile | null;
   searchQuery: string;
   onSearchChange: (q: string) => void;
@@ -248,6 +248,21 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         </div>
       </div>
+
+      {currentUser && !currentUser.twoFactorEnabled && (
+        <div className="border-t border-amber-200 bg-amber-50 px-3 py-2 text-amber-950">
+          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
+            <span className="font-medium">Add your phone number to receive a verification code and secure your account.</span>
+            <button
+              type="button"
+              onClick={() => onOpenAuth('phone')}
+              className="shrink-0 rounded-lg bg-amber-900 px-3 py-1.5 font-bold text-white hover:bg-amber-800"
+            >
+              Add phone
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Horizontal Category Pill Bar */}
       <div className="hidden lg:block border-t border-slate-200/60 px-4 sm:px-6 lg:px-8 bg-slate-50/50">

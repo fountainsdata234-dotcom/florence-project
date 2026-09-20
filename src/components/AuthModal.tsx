@@ -27,7 +27,7 @@ interface AuthModalProps {
   onClose: () => void;
   currentUser: UserProfile | null;
   onUserChange: (user: UserProfile | null) => void;
-  initialMode?: 'signin' | 'signup';
+  initialMode?: 'signin' | 'signup' | 'phone';
 }
 
 type AuthMode = 'signin' | 'signup' | 'email-check' | 'enroll-phone' | 'sms-check' | 'profile';
@@ -66,7 +66,7 @@ const readableError = (error: unknown) => {
 };
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUser, onUserChange, initialMode = 'signin' }) => {
-  const [mode, setMode] = useState<AuthMode>(initialMode);
+  const [mode, setMode] = useState<AuthMode>(initialMode === 'phone' ? 'enroll-phone' : initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -93,7 +93,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
       setError(null);
       setSuccess(null);
       const googleAuthPending = sessionStorage.getItem('florid_google_auth_pending') === 'true';
-      setMode(googleAuthPending ? 'enroll-phone' : currentUser ? 'profile' : initialMode);
+      setMode(googleAuthPending ? 'enroll-phone' : currentUser ? initialMode === 'phone' ? 'enroll-phone' : 'profile' : initialMode === 'phone' ? 'enroll-phone' : initialMode);
     }
   }, [isOpen, currentUser, initialMode]);
   useEffect(() => () => recaptcha.current?.clear(), []);
